@@ -1,0 +1,41 @@
+# Environment variables
+.env
+
+# Python cache files
+__pycache__/
+*.pyc
+
+# Virtual environments
+venv/
+env/
+.miiha/
+
+# Editor settings
+.vscode/
+.idea/
+
+# Jupyter notebook checkpoints
+.ipynb_checkpoints/
+
+# Raw and processed data (exclude big or sensitive data)
+app/data/raw/
+app/data/processed/
+app/data/metadata/
+
+# FAISS index files
+app/db/*.index
+app/db/*.faiss
+
+# Logs and temp scripts
+*.log
+test_connection.py
+sample.py
+
+# Numpy dump files
+*.npy
+
+# Temporary or backup notebooks
+*.checkpoint.ipynb
+
+#venv
+miiha/
