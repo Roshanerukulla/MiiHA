@@ -37,16 +37,17 @@ def query_rag(query: str, top_k: int = 15):
     combined_chunks = []
 
     for i in medline_indices[0]:
-        if i < len(medline_metadata):
-            chunk = medline_metadata[i]
+        if 0 <= i < len(medline_metadata):
+            chunk = dict(medline_metadata[i])  # ensure no overwrite
             chunk["source"] = "MedlinePlus"
             combined_chunks.append(chunk)
 
     for i in openfda_indices[0]:
-        if i < len(openfda_metadata):
-            chunk = openfda_metadata[i]
+        if 0 <= i < len(openfda_metadata):
+            chunk = dict(openfda_metadata[i])
             chunk["source"] = "OpenFDA"
             combined_chunks.append(chunk)
+
 
     # 4. Rerank combined chunks using Cohere
     reranked_chunks = rerank_with_cohere(query, combined_chunks, top_n=3)
@@ -76,7 +77,7 @@ def rerank_with_cohere(query: str, raw_chunks: list, top_n: int = 3):
         query=query,
         documents=documents,
         top_n=top_n,
-        model="rerank-english-v2.0"
+        model="rerank-english-v3.0"
     ).results
 
     return [raw_chunks[result.index] for result in rerank_results]
@@ -87,9 +88,9 @@ def generate_answer(query: str, context_docs: list):
 
     for doc in context_docs:
         if doc["source"] == "MedlinePlus":
-            context_texts.append(doc.get("title", ""))
+             context_texts.append(f"[MedlinePlus] {doc.get('title', '')}")
         elif doc["source"] == "OpenFDA":
-            context_texts.append(doc.get("purpose", "") or doc.get("drug_name", ""))
+             context_texts.append(f"[OpenFDA] {doc.get('purpose', '') or doc.get('drug_name', '')}")
 
     context_text = "\n\n".join(context_texts)
 
