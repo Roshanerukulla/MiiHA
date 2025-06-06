@@ -19,12 +19,7 @@ env/
 
 # Raw and processed data (exclude big or sensitive data)
 app/data/raw/
-app/data/processed/
-app/data/metadata/
 
-# FAISS index files
-app/db/*.index
-app/db/*.faiss
 
 # Logs and temp scripts
 *.log
