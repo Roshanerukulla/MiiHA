@@ -34,6 +34,8 @@ class UserBase(BaseModel):
     birthdate: Optional[str] = None  # Format MM/DD/YYYY (you can parse later)
     gender: Optional[Gender] = None
     medications: List[str] = []
+    illness: List[str]=[]
+    allergies:List[str]=[]
     nicknames: Optional[dict] = {}
     preferences: Optional[Preferences] = None
 
