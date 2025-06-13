@@ -46,6 +46,7 @@ app.openapi = custom_openapi
 
 # ✅ API routes
 app.include_router(onboarding.router, prefix="/api/v1")
+
 app.include_router(login.router, prefix="/api/v1")
 app.include_router(user.router, prefix="/api/v1")
 app.include_router(query.router, prefix="/api/v1")
