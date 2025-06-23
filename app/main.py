@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
-
+import os
 from app.api.v1 import onboarding, login, user, query  # All routers
 
 app = FastAPI(
@@ -50,6 +50,8 @@ app.include_router(onboarding.router, prefix="/api/v1")
 app.include_router(login.router, prefix="/api/v1")
 app.include_router(user.router, prefix="/api/v1")
 app.include_router(query.router, prefix="/api/v1")
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8080)
+    port = int(os.environ.get("PORT", 8080))  # Get from env or fallback to 8080
+    uvicorn.run("app.main:app", host="0.0.0.0", port=port)
