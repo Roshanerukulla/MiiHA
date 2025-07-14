@@ -12,4 +12,5 @@ async def onboard_user(user: UserCreate):
     except ValueError as ve:
         raise HTTPException(status_code=409, detail=str(ve))  # Conflict
     except Exception as e:
+        print(f"Onboarding error:{e}")
         raise HTTPException(status_code=500, detail="Something went wrong")

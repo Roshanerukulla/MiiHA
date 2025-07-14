@@ -15,7 +15,7 @@ router = APIRouter()
 
 @router.post("/login")
 async def login(user: UserLogin):
-    token = await authenticate_user(user.email, user.password)
+    token = authenticate_user(user.email, user.password)
     if not token:
         raise HTTPException(status_code=401, detail="Invalid email or password")
 

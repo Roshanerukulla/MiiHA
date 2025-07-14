@@ -1,27 +1,26 @@
+# app/services/onboarding_service.py
+
+from uuid import uuid4
+from app.db.firestore_client import db  # using Firestore now
 from app.models.user import UserCreate
 from app.utils.hash_utils import hash_password
-from app.db.mongodb import db
-import traceback
+from google.cloud.exceptions import NotFound
 
-async def create_user(user_data: UserCreate) -> str:
-    try:
-        user_dict = user_data.dict()
+async def create_user(user: UserCreate):
+    user_dict = user.dict()
+    user_dict["email"] = user_dict["email"].lower()
 
-        # ✅ Check if email already exists
-        existing_user = await db.users.find_one({"email": user_dict["email"]})
-        if existing_user:
-            raise ValueError("Email already registered")
+    # Check if user already exists
+    existing_users = db.collection("users").where("email", "==", user_dict["email"]).limit(1).stream()
+    if any(existing_users):
+        raise ValueError("User already exists")
 
-        # ✅ Hash password before storing
-        user_dict["hashed_password"] = hash_password(user_dict.pop("password"))
+    # Generate short user_id and hash password
+    user_id = uuid4().hex[:10]
+    user_dict["user_id"] = user_id
+    user_dict["hashed_password"] = hash_password(user_dict.pop("password"))
 
-        # ✅ Insert user
-        result = await db.users.insert_one(user_dict)
-        print("✅ User inserted with ID:", result.inserted_id)
+    # Store in Firestore with doc ID = user_id
+    db.collection("users").document(user_id).set(user_dict)
 
-        return str(result.inserted_id)
-
-    except Exception as e:
-        print("❌ [ONBOARDING ERROR]:", e)
-        traceback.print_exc()
-        raise
+    return user_id

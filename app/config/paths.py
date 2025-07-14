@@ -27,3 +27,8 @@ OPENFDA_METADATA_PATH = METADATA_DIR / "openfda_all_drugs_metadata.json"
 # FAISS index paths
 MEDLINE_INDEX_PATH = DB_DIR / "miiha_medline.index"
 OPENFDA_INDEX_PATH = DB_DIR / "openfda_all_drugs.index"
+
+DRUGBANK_XML_PATH = RAW_DATA_DIR / "drugbank_full_database.xml"
+DRUGBANK_CHUNKS_PATH = PROCESSED_DATA_DIR / "chunks_drugbank.jsonl"
+DRUGBANK_INDEX_PATH = DB_DIR / "drugbank.index"
+DRUGBANK_METADATA_PATH = METADATA_DIR / "drugbank_metadata.json"

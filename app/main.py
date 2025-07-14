@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 import os
-from app.api.v1 import onboarding, login, user, query  # All routers
+from app.api.v1 import onboarding, login, user, query , chat_session # All routers
 
 app = FastAPI(
     title="MIIHA Health Chatbot API",
@@ -50,6 +50,11 @@ app.include_router(onboarding.router, prefix="/api/v1")
 app.include_router(login.router, prefix="/api/v1")
 app.include_router(user.router, prefix="/api/v1")
 app.include_router(query.router, prefix="/api/v1")
+
+
+app.include_router(chat_session.router, prefix="/api/v1/chat", tags=["Chat"])
+
+
 
 if __name__ == "__main__":
     import uvicorn

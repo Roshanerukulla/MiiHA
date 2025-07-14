@@ -45,6 +45,7 @@ class UserCreate(UserBase):
 
 
 class UserInDB(UserBase):
+    user_id: str
     hashed_password: str
 
 class UserLogin(BaseModel):
@@ -67,6 +68,7 @@ class UserUpdate(BaseModel):
 
 class UserOut(BaseModel):
     email: EmailStr
+    user_id: Optional[str]  
     first_name: Optional[str]
     last_name: Optional[str]
     preferred_name: Optional[str]
