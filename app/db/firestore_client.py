@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Point to the downloaded Firebase service account key
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "credentials/miiha-service-account.json")
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "/secrets/miiha-key.json"
 
 # Initialize Firestore client
 db = firestore.Client()
