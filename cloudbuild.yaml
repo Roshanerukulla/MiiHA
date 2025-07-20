@@ -1,0 +1,28 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - '--no-cache'
+      - '-t'
+      - 'us-central1-docker.pkg.dev/cogent-density-466404-n7/cloud-run-source-deploy/miiha/miha:$COMMIT_SHA'
+      - .
+      - '-f'
+      - Dockerfile
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - 'us-central1-docker.pkg.dev/cogent-density-466404-n7/cloud-run-source-deploy/miiha/miha:$COMMIT_SHA'
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - miha
+      - '--image=us-central1-docker.pkg.dev/cogent-density-466404-n7/cloud-run-source-deploy/miiha/miha:$COMMIT_SHA'
+      - '--region=us-central1'
+      - '--allow-unauthenticated'
+      - '--port=8080'
+      - '--quiet'
+
+images:
+  - 'us-central1-docker.pkg.dev/cogent-density-466404-n7/cloud-run-source-deploy/miiha/miha:$COMMIT_SHA'
