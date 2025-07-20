@@ -3,16 +3,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 import os
 from app.api.v1 import onboarding, login, user, query , chat_session # All routers
+import uvicorn
 
 app = FastAPI(
     title="MIIHA Health Chatbot API",
     version="1.0.0",
     description="Backend for personalized health assistant"
 )
-@app.get("/")
-def health_check():
-    return {"status": "ok"}
-
 
 # ✅ CORS middleware (update allowed origins if needed)
 app.add_middleware(
@@ -58,3 +55,7 @@ app.include_router(query.router, prefix="/api/v1")
 
 app.include_router(chat_session.router, prefix="/api/v1/chat", tags=["Chat"])
 
+
+
+if __name__ == "__main__":
+    uvicorn.run("app.main:app", host="0.0.0.0", port=port)
