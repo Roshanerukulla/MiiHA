@@ -9,6 +9,10 @@ app = FastAPI(
     version="1.0.0",
     description="Backend for personalized health assistant"
 )
+@app.get("/")
+def health_check():
+    return {"status": "ok"}
+
 
 # ✅ CORS middleware (update allowed origins if needed)
 app.add_middleware(
