@@ -26,3 +26,6 @@ steps:
 
 images:
   - 'us-central1-docker.pkg.dev/cogent-density-466404-n7/cloud-run-source-deploy/miiha/miha:$COMMIT_SHA'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
