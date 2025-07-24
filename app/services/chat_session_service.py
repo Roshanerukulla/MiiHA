@@ -1,3 +1,4 @@
+#app/services/chat_session_services.py
 from uuid import uuid4
 from datetime import datetime
 from app.db.firestore_client import db
@@ -15,7 +16,7 @@ def create_chat_session(user_id: str, session_name: str = "New Chat"):
     db.collection("chat_sessions").document(session_id).set(session_data)
     return session_id
 
-def add_message_to_session(session_id: str, prompt: str, response: str):
+def add_message_to_session(session_id: str, prompt: str, response: str, sources: list = None):
     messages_ref = db.collection("chat_sessions").document(session_id).collection("messages")
 
     existing_messages = list(messages_ref.stream())
@@ -23,15 +24,12 @@ def add_message_to_session(session_id: str, prompt: str, response: str):
         oldest = sorted(existing_messages, key=lambda x: x.create_time)[0]
         oldest.reference.delete()
 
-    # Let Firestore generate the document ID
     messages_ref.add({
         "timestamp": datetime.utcnow().isoformat(),
         "prompt": prompt,
-        "response": response
+        "response": response,
+        "sources": sources or []
     })
-
-
-
 
 def get_sessions_for_user(user_id: str):
     sessions = db.collection("chat_sessions").where("user_id", "==", user_id).stream()

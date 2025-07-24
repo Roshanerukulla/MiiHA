@@ -1,53 +1,109 @@
+# app/services/query_service.py
+
 import faiss
 import numpy as np
 import json
 from sentence_transformers import SentenceTransformer
 from dotenv import load_dotenv
+import os
+import cohere
+
 from app.config.paths import (
     MEDLINE_INDEX_PATH,
     OPENFDA_INDEX_PATH,
     MEDLINE_METADATA_PATH,
-    OPENFDA_METADATA_PATH
+    OPENFDA_METADATA_PATH,
+    DRUGBANK_INDEX_PATH,
+    DRUGBANK_METADATA_PATH
 )
-import cohere
-import os
 
 # Load environment and API keys
 load_dotenv()
 co = cohere.Client(os.getenv("COHERE_API_KEY"))
-
-# Load MiniLM model
 model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
 
 # Load FAISS indexes and metadata
 medline_index = faiss.read_index(str(MEDLINE_INDEX_PATH))
 openfda_index = faiss.read_index(str(OPENFDA_INDEX_PATH))
+drugbank_index = None
 
 with open(MEDLINE_METADATA_PATH, "r", encoding="utf-8") as f:
     medline_metadata = json.load(f)
-
 with open(OPENFDA_METADATA_PATH, "r", encoding="utf-8") as f:
     openfda_metadata = json.load(f)
-
-# Optional DrugBank
 try:
-    from app.config.paths import DRUGBANK_INDEX_PATH, DRUGBANK_METADATA_PATH
     drugbank_index = faiss.read_index(str(DRUGBANK_INDEX_PATH))
     with open(DRUGBANK_METADATA_PATH, "r", encoding="utf-8") as f:
         drugbank_metadata = json.load(f)
 except Exception as e:
     print("⚠️ DrugBank index or metadata not loaded:", e)
-    drugbank_index = None
     drugbank_metadata = []
+
+# Heuristics
 
 def simulate_rag_chunk_quality(chunks):
     return 0.6 if len(chunks) >= 2 else 0.2
 
-# Full RAG Query Function with Tone & Fallback
+def is_general_prompt(prompt: str) -> bool:
+    general_keywords = ["hello", "hi", "thanks", "goodbye", "hey", "sup", "yo", "what's up"]
+    return (
+        any(k in prompt for k in general_keywords)
+        and len(prompt.split()) <= 5
+        and not any(k in prompt for k in ["medicine", "source", "dose", "treatment", "symptom", "prescription"])
+    )
+
+def is_health_query(prompt: str) -> bool:
+    keywords = [
+        "disease", "medicine", "drug", "dose", "symptom", "treatment", "side effect",
+        "diagnosis", "condition", "health", "prescription", "nausea", "dizziness",
+        "mental", "depression", "anxiety", "therapy", "counseling", "panic", "emotional", "mood",
+        "infection", "pain", "vomiting", "blood", "pressure", "heart", "fatigue", "urine"
+    ]
+    return any(k in prompt.lower() for k in keywords)
+
+def is_follow_up(prompt: str, chat_history: list) -> bool:
+    if not chat_history:
+        return False
+    follow_up_phrases = ["continue", "what about", "also", "you said", "remember", "previous", "earlier", "next", "what else"]
+    return any(p in prompt.lower() for p in follow_up_phrases)
+
+def is_mixed_topic(prompt: str) -> bool:
+    political_keywords = ["trump", "biden", "president", "election"]
+    health_keywords = ["medicine", "dose", "treatment", "diabetes"]
+    return any(pk in prompt.lower() for pk in political_keywords) and any(hk in prompt.lower() for hk in health_keywords)
+
+# Main Query Handler
 
 def query_rag(query: str, chat_history: list = None, top_k: int = 15, tone: str = "friendly"):
+    chat_history = chat_history or []
+    lower_query = query.strip().lower()
+
+    if is_mixed_topic(lower_query):
+        return {
+            "query": query,
+            "answer": "This looks like a mix of health and political topics. I can help you with medical or health questions—could you clarify what you'd like to focus on?",
+            "sources": []
+        }
+
+    if any(p in lower_query for p in ["source", "where did you get", "how accurate", "based on what"]):
+        answer = generate_answer(query, [], chat_history, tone, use_rag=False)
+        return {"query": query, "answer": answer, "sources": []}
+
+    is_general = is_general_prompt(lower_query)
+    is_follow_up_flag = is_follow_up(lower_query, chat_history)
+    is_health = is_health_query(lower_query)
+
+    print("🧠 Detected general prompt:", is_general)
+    print("🧪 Detected health query:", is_health)
+    print("💬 Is follow-up:", is_follow_up_flag)
+
+    if not (is_health or is_follow_up_flag):
+        answer = generate_answer(query, [], chat_history, tone, use_rag=False)
+        return {"query": query, "answer": answer, "sources": []}
+
     query_vector = model.encode([query])[0].astype("float32")
 
+    # Retrieve
     medline_scores, medline_indices = medline_index.search(np.array([query_vector]), top_k)
     openfda_scores, openfda_indices = openfda_index.search(np.array([query_vector]), top_k)
 
@@ -62,7 +118,8 @@ def query_rag(query: str, chat_history: list = None, top_k: int = 15, tone: str 
         if 0 <= i < len(openfda_metadata):
             chunk = dict(openfda_metadata[i])
             chunk["source"] = "OpenFDA"
-            combined_chunks.append(chunk)
+            if len(chunk.get("purpose", "")) > 20:
+                combined_chunks.append(chunk)
 
     if drugbank_index:
         try:
@@ -71,32 +128,37 @@ def query_rag(query: str, chat_history: list = None, top_k: int = 15, tone: str 
                 if 0 <= i < len(drugbank_metadata):
                     chunk = dict(drugbank_metadata[i])
                     chunk["source"] = "DrugBank"
-                    combined_chunks.append(chunk)
+                    if len(chunk.get("title", "")) > 5:
+                        combined_chunks.append(chunk)
         except Exception as e:
             print(" DrugBank query failed:", e)
 
-    reranked_chunks = rerank_with_cohere(query, combined_chunks, top_n=3)
+    combined_chunks = [doc for doc in combined_chunks if doc.get("title") or doc.get("purpose") or doc.get("drug_name")]
 
+    reranked_chunks = rerank_with_cohere(query, combined_chunks, top_n=3)
     use_rag = simulate_rag_chunk_quality(reranked_chunks) > 0.4
     answer = generate_answer(query, reranked_chunks if use_rag else [], chat_history, tone, use_rag)
 
     safe_sources = []
-    for doc in reranked_chunks:
-        if doc["source"] == "DrugBank":
-            safe_sources.append({
-                "title": doc.get("title"),
-                "url": doc.get("url"),
-                "source": "DrugBank",
-                "note": "Description hidden due to DrugBank license. Visit link for details."
-            })
-        else:
-            safe_sources.append(doc)
+    if use_rag:
+        for doc in reranked_chunks:
+            if doc["source"] == "DrugBank":
+                safe_sources.append({
+                    "title": doc.get("title"),
+                    "url": doc.get("url"),
+                    "source": "DrugBank",
+                    "note": "Description hidden due to DrugBank license. Visit link for details."
+                })
+            else:
+                safe_sources.append(doc)
 
     return {
         "query": query,
         "answer": answer,
-        "sources": safe_sources if use_rag else []
+        "sources": safe_sources
     }
+
+# Helper: Reranking
 
 def rerank_with_cohere(query: str, raw_chunks: list, top_n: int = 3):
     documents = []
@@ -117,7 +179,24 @@ def rerank_with_cohere(query: str, raw_chunks: list, top_n: int = 3):
 
     return [raw_chunks[result.index] for result in rerank_results]
 
+
 def generate_answer(query: str, context_docs: list, chat_history: list = None, tone: str = "friendly", use_rag: bool = True):
+    if any(p in query.lower() for p in ["do you remember", "what we spoke", "context", "previous chat", "earlier you said"]):
+        if chat_history and len(chat_history) >= 2:
+            last_topic = chat_history[-2]["content"]
+            return f"You were previously asking about: \"{last_topic}\". Would you like to continue on that topic?"
+        else:
+            return "I'm here to help. Could you remind me what you were referring to?"
+
+    if any(p in query.lower() for p in ["what are your sources", "how accurate", "where did you get this", "based on what", "source of info"]):
+        if chat_history and any("sources" in turn for turn in chat_history[::-1]):
+            for turn in reversed(chat_history):
+                if "sources" in turn and turn["sources"]:
+                    sources = turn["sources"]
+                    mentioned = [s.get("source") for s in sources if s.get("source")]
+                    if mentioned:
+                        return f"My previous response was based on: {', '.join(sorted(set(mentioned)))}."
+
     context_texts = []
     for doc in context_docs:
         if doc["source"] == "MedlinePlus":
