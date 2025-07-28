@@ -3,7 +3,7 @@ from app.core.dependencies import get_current_user
 from app.models.user import UserOut, UserUpdate
 from app.utils.hash_utils import hash_password, verify_password
 from app.db.firestore_client import db
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 
 router = APIRouter()
 
@@ -12,7 +12,7 @@ router = APIRouter()
 async def get_my_profile(current_user: dict = Depends(get_current_user)):
     return current_user
 
-# ✅ Update user profile (name, etc.)
+# ✅ Update profile
 @router.put("/me", response_model=UserOut)
 async def update_my_profile(update: UserUpdate, current_user: dict = Depends(get_current_user)):
     email = current_user["email"]
@@ -24,7 +24,6 @@ async def update_my_profile(update: UserUpdate, current_user: dict = Depends(get
     if not update_data:
         raise HTTPException(status_code=400, detail="No valid update fields provided")
 
-    # Firestore: stream query result
     users = db.collection("users").where("email", "==", email).stream()
     user_doc = next(users, None)
 
@@ -37,7 +36,7 @@ async def update_my_profile(update: UserUpdate, current_user: dict = Depends(get
     updated_user = user_ref.get().to_dict()
     return updated_user
 
-# ✅ Password Update Route
+# ✅ Change password (requires login + current password)
 class PasswordUpdate(BaseModel):
     current_password: str
     new_password: str
@@ -63,3 +62,23 @@ async def update_password(data: PasswordUpdate, current_user: dict = Depends(get
     })
 
     return {"message": "Password updated successfully"}
+
+# ✅ Reset password (just email + new password)
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+    new_password: str
+
+@router.post("/reset_password")
+async def reset_password(data: PasswordResetRequest):
+    users = db.collection("users").where("email", "==", data.email).stream()
+    user_doc = next(users, None)
+
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="Email not found")
+
+    new_hashed_password = hash_password(data.new_password)
+    db.collection("users").document(user_doc.id).update({
+        "hashed_password": new_hashed_password
+    })
+
+    return {"message": "Password reset successfully"}

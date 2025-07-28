@@ -82,14 +82,14 @@ class UserOut(BaseModel):
 
 
 
-class PasswordUpdate(BaseModel):
-    current_password: str
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
     new_password: str
 
     class Config:
         schema_extra = {
             "example": {
-                "current_password": "oldpassword123",
-                "new_password": "newStrongPass456"
+                "email": "user@example.com",
+                "new_password": "newStrongPassword123"
             }
         }
