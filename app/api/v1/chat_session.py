@@ -55,7 +55,12 @@ async def send_message(
         chat_history.append({"role": "user", "content": msg["prompt"]})
         chat_history.append({"role": "assistant", "content": msg["response"]})
 
-    rag_result = query_rag(request.prompt, chat_history=chat_history)
+    # ✅ FIX: Await the async function and pass user_id
+    rag_result = await query_rag(
+        query=request.prompt,
+        user_id=user_id,
+        chat_history=chat_history
+    )
 
     try:
         add_message_to_session(
@@ -72,6 +77,7 @@ async def send_message(
         "answer": rag_result["answer"],
         "sources": rag_result["sources"]
     }
+
 
 @router.get("/chat/sessions")
 async def list_user_sessions(current_user: dict = Depends(get_current_user)):

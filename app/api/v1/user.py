@@ -4,6 +4,8 @@ from app.models.user import UserOut, UserUpdate
 from app.utils.hash_utils import hash_password, verify_password
 from app.db.firestore_client import db
 from pydantic import BaseModel, EmailStr
+from app.services.firestore_user_service import invalidate_user_cache
+
 
 router = APIRouter()
 
@@ -32,6 +34,9 @@ async def update_my_profile(update: UserUpdate, current_user: dict = Depends(get
 
     user_ref = db.collection("users").document(user_doc.id)
     user_ref.update(update_data)
+
+    # ✅ Invalidate cached profile
+    await invalidate_user_cache(current_user["user_id"])
 
     updated_user = user_ref.get().to_dict()
     return updated_user
