@@ -218,7 +218,7 @@ def generate_answer(query: str, context_docs: list, chat_history: list = None, t
     }.get(tone, "")
 
     prompt = f"""
-You are a helpful, medically accurate assistant named MIIHA.
+You are a helpful, medically accurate assistant named MIHA.
 Greet the user as {preferred_name.title()} in the first message. In follow-up responses, use the name naturally if relevant, but avoid repeating the greeting.
 
 
