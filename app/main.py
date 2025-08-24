@@ -14,7 +14,7 @@ app = FastAPI(
 # ✅ CORS middleware (update allowed origins if needed)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://mihachat.storage.googleapis.com/index.html"],  
+    allow_origins=["https://mihachat.storage.googleapis.com"],  
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
