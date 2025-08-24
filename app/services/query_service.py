@@ -247,7 +247,7 @@ Assistant:"""
     response = co.generate(
         model="command-r-plus",
         prompt=prompt,
-        max_tokens=350,
+        max_tokens=600,
         temperature=0.5,
         stop_sequences=["User:"]
     )
