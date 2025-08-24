@@ -79,8 +79,14 @@ async def query_rag(query: str, user_id: str, chat_history: list = None, top_k: 
     chat_history = chat_history or []
     lower_query = query.strip().lower()
 
-    user_profile = await get_user_profile(user_id)
-    preferred_name = user_profile.get("preferred_name", "there") if user_profile else "there"
+    try:
+        user_profile = await get_user_profile(user_id)
+    except Exception as e:
+        print(f"⚠️ Failed to fetch user profile for {user_id}: {e}")
+        user_profile = {}
+
+    preferred_name = user_profile.get("preferred_name", "there")
+
 
     if is_mixed_topic(lower_query):
         return {
