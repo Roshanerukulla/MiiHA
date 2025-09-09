@@ -61,4 +61,5 @@ app.include_router(chat_session.router, prefix="/api/v1/chat", tags=["Chat"])
 
 
 if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8080))
     uvicorn.run("app.main:app", host="0.0.0.0", port=port)
