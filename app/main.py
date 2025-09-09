@@ -51,6 +51,9 @@ app.include_router(onboarding.router, prefix="/api/v1")
 app.include_router(login.router, prefix="/api/v1")
 app.include_router(user.router, prefix="/api/v1")
 app.include_router(query.router, prefix="/api/v1")
+from app.api.v1 import onboarding, login, user, query, chat_session, cleanup
+
+app.include_router(cleanup.router, prefix="/api/v1", tags=["Maintenance"])
 
 
 app.include_router(chat_session.router, prefix="/api/v1/chat", tags=["Chat"])

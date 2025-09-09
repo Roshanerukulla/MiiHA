@@ -1,5 +1,3 @@
-# app/db/firestore_client.py
-
 import os
 from google.cloud import firestore
 from google.cloud.firestore_v1.async_client import AsyncClient
@@ -7,12 +5,17 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# 🔹 Synchronous Firestore client (used for regular DB access)
-db = firestore.Client()
+# 🔹 Hardcode or pull project ID from env
+PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT", "iui-info-hcc-hci")
 
-# 🔹 Asynchronous Firestore client (used in services like query_service.py)
-async_db = AsyncClient()
+# Synchronous Firestore client
+db = firestore.Client(project=PROJECT_ID)
 
-# (Optional) Convenience access to collections
+# Asynchronous Firestore client
+async_db = AsyncClient(project=PROJECT_ID)
+
+# Optional collections
 users_collection = db.collection("users")
 chat_sessions_collection = db.collection("chat_sessions")
+
+print(f"✅ Firestore connected to project: {PROJECT_ID}")

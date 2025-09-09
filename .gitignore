@@ -35,3 +35,6 @@ sample.py
 #venv
 miiha/
 echo "credentials/*.json" >> .gitignore
+
+secrets/
+*.json
