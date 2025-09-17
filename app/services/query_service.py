@@ -183,8 +183,14 @@ def rerank_with_cohere(query: str, raw_chunks: list, top_n: int = 3):
 
     return [raw_chunks[result.index] for result in rerank_results]
 
-
-def generate_answer(query: str, context_docs: list, chat_history: list = None, tone: str = "friendly", use_rag: bool = True, preferred_name: str = "there"):
+def generate_answer(
+    query: str,
+    context_docs: list,
+    chat_history: list = None,
+    tone: str = "friendly",
+    use_rag: bool = True,
+    preferred_name: str = "there"
+):
     chat_history = chat_history or []
     lower_query = query.strip().lower()
 
@@ -199,6 +205,7 @@ def generate_answer(query: str, context_docs: list, chat_history: list = None, t
         else:
             return f"I'm here to help, {preferred_name}. Could you remind me what you were referring to?"
 
+    # 🔎 Collect RAG context
     context_texts = []
     for doc in context_docs:
         if doc["source"] == "MedlinePlus":
@@ -210,24 +217,29 @@ def generate_answer(query: str, context_docs: list, chat_history: list = None, t
 
     context_text = "\n\n".join(context_texts) if use_rag else "No medical documents found. Please answer using general medical knowledge."
 
-    chat_turns = ""
-    if chat_history:
-        for turn in chat_history[-8:]:
-            role = turn["role"]
-            content = turn["content"]
-            chat_turns += f"{role.title()}: {content}\n"
-
+    # 🔎 Tone guidance
     tone_instruction = {
         "friendly": "Use a warm and supportive tone, like a caring friend.",
         "professional": "Use a formal and clinical tone, like a medical practitioner.",
         "motivational": "Encourage the user with empowering and positive language."
     }.get(tone, "")
 
-    prompt = f"""
+    # 🔎 Convert history into Cohere format
+    role_map = {"user": "User", "assistant": "Chatbot", "system": "System"}
+    cohere_history = [
+        {"role": role_map.get(turn["role"].lower(), "User"), "message": turn["content"]}
+        for turn in chat_history[-8:]
+    ]
+
+    # ✅ Use Cohere Chat API
+    response = co.chat(
+        model="command-r-plus-08-2024",   # latest available R+ model
+        message=query,
+        chat_history=cohere_history,
+        temperature=0.5,
+        preamble=f"""
 You are a helpful, medically accurate assistant named MIHA.
 Greet the user as {preferred_name.title()} in the first message. In follow-up responses, use the name naturally if relevant, but avoid repeating the greeting.
-
-
 
 {tone_instruction}
 
@@ -235,21 +247,9 @@ Use the following:
 - Provided chat history to maintain continuity.
 - Medical context documents for factual responses.
 
-Chat History:
-{chat_turns}
-
 Medical Context:
 {context_text}
-
-User ({preferred_name}): {query}
-Assistant:"""
-
-    response = co.generate(
-        model="command-r-plus",
-        prompt=prompt,
-        max_tokens=600,
-        temperature=0.5,
-        stop_sequences=["User:"]
+"""
     )
 
-    return response.generations[0].text.strip()
+    return response.text.strip()

@@ -38,3 +38,5 @@ echo "credentials/*.json" >> .gitignore
 
 secrets/
 *.json
+
+service_test.json
