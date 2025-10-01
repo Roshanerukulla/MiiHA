@@ -81,7 +81,6 @@ class UserOut(BaseModel):
     preferences: Optional[Preferences] = None
 
 
-
 class PasswordResetRequest(BaseModel):
     email: EmailStr
     new_password: str
