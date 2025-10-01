@@ -19,6 +19,5 @@ COPY . /app
 
 # Set environment variable so app loads from /app/models
 ENV HF_HOME=/app/models
-
 # Start Uvicorn with the app in app.main:app
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
