@@ -21,7 +21,9 @@ from app.services.firestore_user_service import get_user_profile
 # Load environment and API keys
 load_dotenv()
 co = cohere.Client(os.getenv("COHERE_API_KEY"))
-model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+
+MODEL_PATH = os.getenv("HF_HOME", "/app/models")
+model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2", cache_folder=MODEL_PATH)
 
 # Load FAISS indexes and metadata
 medline_index = faiss.read_index(str(MEDLINE_INDEX_PATH))
