@@ -4,6 +4,7 @@ from fastapi.openapi.utils import get_openapi
 import os
 from app.api.v1 import onboarding, login, user, query , chat_session # All routers
 import uvicorn
+from app.api.v1 import admin_auth,admin_login
 
 app = FastAPI(
     title="MIIHA Health Chatbot API",
@@ -57,6 +58,10 @@ app.include_router(cleanup.router, prefix="/api/v1", tags=["Maintenance"])
 
 
 app.include_router(chat_session.router, prefix="/api/v1/chat", tags=["Chat"])
+
+
+app.include_router(admin_auth.router, prefix="/api/v1", tags=["Admin"])
+app.include.router(admin_login.router, prefix = "/api/v1", tags=["Admin"])
 
 
 
