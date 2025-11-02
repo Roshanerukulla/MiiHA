@@ -61,7 +61,7 @@ app.include_router(chat_session.router, prefix="/api/v1/chat", tags=["Chat"])
 
 
 app.include_router(admin_auth.router, prefix="/api/v1", tags=["Admin"])
-app.include.router(admin_login.router, prefix = "/api/v1", tags=["Admin"])
+app.include_router(admin_login.router, prefix = "/api/v1", tags=["Admin"])
 
 
 
