@@ -91,3 +91,17 @@ urllib3==2.4.0
 uv==0.6.16
 uvicorn==0.34.1
 wcwidth==0.2.13
+
+# Feature additions (15 advanced features)
+redis>=5.0.0
+reportlab>=4.0.0
+apscheduler>=3.10.0
+slowapi>=0.1.9
+gtts>=2.5.0
+openai-whisper>=20231117
+aiosmtplib>=3.0.0
+langdetect>=1.0.9
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
+mongomock-motor>=0.0.21
+python-multipart>=0.0.9
