@@ -39,3 +39,6 @@ sample.py
 
 #venv
 miiha/
+
+# Claude Code tooling
+.claude/
