@@ -1,17 +1,21 @@
+from app.db.mongodb import db
 from app.models.user import UserCreate
 from app.utils.hash_utils import hash_password
-from app.db.mongodb import db
+from app.utils.logger import get_logger
+
+logger = get_logger(__name__)
+
 
 async def create_user(user_data: UserCreate) -> str:
-    user_dict = user_data.dict()
+    user_dict = user_data.model_dump()  # .dict() is deprecated in Pydantic v2
 
-    # ✅ Check if email already exists
     existing_user = await db.users.find_one({"email": user_dict["email"]})
     if existing_user:
         raise ValueError("Email already registered")
 
-    # ✅ Hash password before storing
     user_dict["hashed_password"] = hash_password(user_dict.pop("password"))
 
     result = await db.users.insert_one(user_dict)
-    return str(result.inserted_id)
+    user_id = str(result.inserted_id)
+    logger.info(f"New user registered: {user_dict['email']}")
+    return user_id

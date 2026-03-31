@@ -1,119 +1,146 @@
+"""
+RAG query service — lazy-loads heavy resources on first use,
+offloads CPU-bound work to a thread pool so the FastAPI event
+loop is never blocked.
+"""
+
+import asyncio
+import json
+from typing import Optional
+
+import cohere
 import faiss
 import numpy as np
-import json
 from sentence_transformers import SentenceTransformer
-from pathlib import Path
-import cohere
-import os
-from dotenv import load_dotenv
 
-# Load environment and API keys
-load_dotenv()
-co = cohere.Client(os.getenv("COHERE_API_KEY"))
+from app.config.llmconfig import SENTENCE_TRANSFORMER_MODEL, RERANK_TOP_N
+from app.config.paths import (
+    MEDLINE_INDEX_PATH,
+    MEDLINE_METADATA_PATH,
+    OPENFDA_INDEX_PATH,
+    OPENFDA_METADATA_PATH,
+)
+from app.core.config import settings
+from app.rag.generator import generate_answer
+from app.rag.reranker import rerank_with_cohere
+from app.utils.logger import get_logger
 
-#  Load MiniLM model
-model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+logger = get_logger(__name__)
 
-#  Load FAISS indexes and metadata (MedlinePlus + OpenFDA)
-medline_index = faiss.read_index("E:/MiiHA/app/db/miiha_medline.index")
-openfda_index = faiss.read_index("E:/MiiHA/app/db/openfda_all_drugs.index")
-
-with open("E:/MiiHA/app/data/metadata/medline_metadata.json", "r", encoding="utf-8") as f:
-    medline_metadata = json.load(f)
-
-with open("E:/MiiHA/app/data/metadata/openfda_all_drugs_metadata.json", "r", encoding="utf-8") as f:
-    openfda_metadata = json.load(f)
-
-# 🔍 Full RAG Query Function
-def query_rag(query: str, top_k: int = 15):
-    # 1. Embed query
-    query_vector = model.encode([query])[0].astype("float32")
-
-    # 2. Search FAISS indexes separately
-    medline_scores, medline_indices = medline_index.search(np.array([query_vector]), top_k)
-    openfda_scores, openfda_indices = openfda_index.search(np.array([query_vector]), top_k)
-
-    # 3. Collect results from both sources
-    combined_chunks = []
-
-    for i in medline_indices[0]:
-        if 0 <= i < len(medline_metadata):
-            chunk = dict(medline_metadata[i])  # ensure no overwrite
-            chunk["source"] = "MedlinePlus"
-            combined_chunks.append(chunk)
-
-    for i in openfda_indices[0]:
-        if 0 <= i < len(openfda_metadata):
-            chunk = dict(openfda_metadata[i])
-            chunk["source"] = "OpenFDA"
-            combined_chunks.append(chunk)
+# ---------------------------------------------------------------------------
+# Lazy-loaded singletons (populated on first query, not at import time)
+# ---------------------------------------------------------------------------
+_co: Optional[cohere.Client] = None
+_model: Optional[SentenceTransformer] = None
+_medline_index = None
+_openfda_index = None
+_medline_metadata: Optional[list] = None
+_openfda_metadata: Optional[list] = None
 
 
-    # 4. Rerank combined chunks using Cohere
-    reranked_chunks = rerank_with_cohere(query, combined_chunks, top_n=3)
+def _get_cohere_client() -> cohere.Client:
+    global _co
+    if _co is None:
+        _co = cohere.Client(settings.cohere_api_key)
+        logger.info("Cohere client initialised")
+    return _co
 
-    # 5. Generate answer from reranked top-3
-    answer = generate_answer(query, reranked_chunks)
 
-    # 6. Return result
-    return {
-        "query": query,
-        "answer": answer,
-        "sources": reranked_chunks
-    }
+def _get_model() -> SentenceTransformer:
+    global _model
+    if _model is None:
+        logger.info(f"Loading SentenceTransformer model: {SENTENCE_TRANSFORMER_MODEL}")
+        _model = SentenceTransformer(SENTENCE_TRANSFORMER_MODEL)
+        logger.info("SentenceTransformer model loaded")
+    return _model
 
-#  Cohere Rerank
-def rerank_with_cohere(query: str, raw_chunks: list, top_n: int = 3):
-    documents = []
 
-    # Choose text depending on source
-    for doc in raw_chunks:
-        if doc["source"] == "MedlinePlus":
-            documents.append(doc.get("title", ""))
-        elif doc["source"] == "OpenFDA":
-            documents.append(doc.get("purpose", "") or doc.get("drug_name", ""))
+def _load_indexes() -> None:
+    global _medline_index, _openfda_index, _medline_metadata, _openfda_metadata
+    if _medline_index is not None:
+        return  # already loaded
 
-    rerank_results = co.rerank(
-        query=query,
-        documents=documents,
-        top_n=top_n,
-        model="rerank-english-v3.0"
-    ).results
+    for path in (MEDLINE_INDEX_PATH, OPENFDA_INDEX_PATH, MEDLINE_METADATA_PATH, OPENFDA_METADATA_PATH):
+        if not path.exists():
+            raise FileNotFoundError(f"Required data file not found: {path}")
 
-    return [raw_chunks[result.index] for result in rerank_results]
+    logger.info("Loading FAISS indexes and metadata…")
+    _medline_index = faiss.read_index(str(MEDLINE_INDEX_PATH))
+    _openfda_index = faiss.read_index(str(OPENFDA_INDEX_PATH))
 
-# 🗣️ Cohere Generate
-def generate_answer(query: str, context_docs: list):
-    context_texts = []
+    with open(MEDLINE_METADATA_PATH, "r", encoding="utf-8") as f:
+        _medline_metadata = json.load(f)
+    with open(OPENFDA_METADATA_PATH, "r", encoding="utf-8") as f:
+        _openfda_metadata = json.load(f)
 
-    for doc in context_docs:
-        if doc["source"] == "MedlinePlus":
-             context_texts.append(f"[MedlinePlus] {doc.get('title', '')}")
-        elif doc["source"] == "OpenFDA":
-             context_texts.append(f"[OpenFDA] {doc.get('purpose', '') or doc.get('drug_name', '')}")
-
-    context_text = "\n\n".join(context_texts)
-
-    prompt = f"""
-You are a helpful, medically accurate health assistant named MIIHA.
-
-Use the provided context below to answer the user's question if possible.
-If the context is not relevant or sufficient, use your general medical knowledge to provide the best answer while being careful and factual.
-
-Context:
-{context_text}
-
-Question:
-{query}
-
-Answer:"""
-
-    response = co.generate(
-        model="command-r-plus",
-        prompt=prompt,
-        max_tokens=300,
-        temperature=0.5
+    logger.info(
+        f"Loaded {len(_medline_metadata)} MedlinePlus records "
+        f"and {len(_openfda_metadata)} OpenFDA records"
     )
 
-    return response.generations[0].text.strip()
 
+# ---------------------------------------------------------------------------
+# Core synchronous pipeline (runs inside asyncio.to_thread)
+# ---------------------------------------------------------------------------
+
+def _query_rag_sync(query: str, top_k: int) -> dict:
+    _load_indexes()
+    model = _get_model()
+    co = _get_cohere_client()
+
+    # 1. Embed query
+    try:
+        query_vector = model.encode([query])[0].astype("float32")
+    except Exception as exc:
+        logger.error(f"Embedding failed: {exc}")
+        raise RuntimeError("Failed to embed query") from exc
+
+    # 2. Vector search
+    try:
+        _, medline_indices = _medline_index.search(np.array([query_vector]), top_k)
+        _, openfda_indices = _openfda_index.search(np.array([query_vector]), top_k)
+    except Exception as exc:
+        logger.error(f"FAISS search failed: {exc}")
+        raise RuntimeError("Vector search failed") from exc
+
+    # 3. Collect candidates
+    combined_chunks = []
+    for i in medline_indices[0]:
+        if 0 <= i < len(_medline_metadata):
+            combined_chunks.append({**_medline_metadata[i], "source": "MedlinePlus"})
+    for i in openfda_indices[0]:
+        if 0 <= i < len(_openfda_metadata):
+            combined_chunks.append({**_openfda_metadata[i], "source": "OpenFDA"})
+
+    if not combined_chunks:
+        logger.warning(f"No retrieval results for query: {query[:80]!r}")
+        return {
+            "query": query,
+            "answer": "I could not find relevant information to answer your question.",
+            "sources": [],
+        }
+
+    # 4. Rerank — graceful fallback on failure
+    try:
+        reranked = rerank_with_cohere(co, query, combined_chunks, top_n=RERANK_TOP_N)
+    except Exception as exc:
+        logger.warning(f"Reranking failed, using top raw results: {exc}")
+        reranked = combined_chunks[:RERANK_TOP_N]
+
+    # 5. Generate answer
+    try:
+        answer = generate_answer(co, query, reranked)
+    except Exception as exc:
+        logger.error(f"Answer generation failed: {exc}")
+        raise RuntimeError("Failed to generate answer") from exc
+
+    return {"query": query, "answer": answer, "sources": reranked}
+
+
+# ---------------------------------------------------------------------------
+# Public async entry-point
+# ---------------------------------------------------------------------------
+
+async def query_rag(query: str, top_k: int = 15) -> dict:
+    """Async wrapper — offloads the CPU-bound RAG pipeline to a thread pool."""
+    return await asyncio.to_thread(_query_rag_sync, query, top_k)
